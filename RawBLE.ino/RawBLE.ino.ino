@@ -17,6 +17,8 @@
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
 #include <Adafruit_NeoPixel.h>
+
+
 #define LED_PWR 17
 #define LED_PIN 18
 #define LED_COUNT 1
@@ -25,26 +27,54 @@ Adafruit_NeoPixel pixel(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 
 #define PUMP_PIN A0
-int pumpRunTime = 1235;
 
 
-void activatePump(int duration) {
+//BLESerial<etl::queue<uint8_t, 255, etl::memory_model::MEMORY_MODEL_SMALL>> SerialBLE;
+
+void setLED(int r, int g, int b) {
+    if ((r+g+b) == 0) {
+      digitalWrite(LED_PWR, LOW);
+    } else {
+      digitalWrite(LED_PWR, HIGH);
+    }
+    pixel.setPixelColor(0, pixel.Color(r,g,b));
+    pixel.show();
+  }
+
+
+
+void runPump(int duration) {
     Serial.print("Activating pump for ");
     Serial.print(duration);
     Serial.println(" ms");
 
-    pixel.setPixelColor(0, pixel.Color(128,0,128));
-    pixel.show();
-
+    setLED(128, 0, 128);
+   
     digitalWrite(PUMP_PIN, HIGH);  // Turn pump ON
     delay(duration);               // Wait for the defined duration
     digitalWrite(PUMP_PIN, LOW);   // Turn pump OFF
 
-    pixel.setPixelColor(0, pixel.Color(0,0,0));
-    pixel.show();
+    setLED(0, 0, 0);
 
     Serial.println("Pump deactivated");
 }
+void processCommand(String str)
+  {
+  int msPump;
+
+  if (str.startsWith("OIL:")) {
+    msPump = str.substring(4).toInt();
+    if (msPump != 0) { 
+      runPump(msPump);
+      Serial.println("OK");
+      return;
+      }
+  } else {
+    Serial.println("ERR");
+    }
+  }
+
+String strCommand;
 
 
 class MyCallbacks : public BLECharacteristicCallbacks {
@@ -52,11 +82,7 @@ class MyCallbacks : public BLECharacteristicCallbacks {
     String value = pCharacteristic->getValue();
 
     if (value.length() > 0) {
-      
-      pumpRunTime = atoi(value.c_str());
-      Serial.print("Pump Run Time: ");
-      Serial.println(value);
-      
+      strCommand = value;
     }
   }
 };
@@ -84,16 +110,16 @@ void setup() {
 
   pinMode(PUMP_PIN, OUTPUT);
   pinMode(LED_PWR, OUTPUT);      // Set the RGB_PWR pin to OUTPUT
-  digitalWrite(LED_PWR , HIGH);   // Turn on the RGB_PWR (LDO2)
+ // digitalWrite(LED_PWR , HIGH);   // Turn on the RGB_PWR (LDO2)
   pixel.begin();
   pixel.show();
   pixel.setBrightness(50);  // Set brightness (0-255)
 }
 
 void loop() {
-  if (pumpRunTime != 0){
-    activatePump(pumpRunTime);
-    pumpRunTime = 0;
+  if (strCommand.length() > 0) {
+    processCommand(strCommand);
+    strCommand = "";
   }
   delay(100);
 }
